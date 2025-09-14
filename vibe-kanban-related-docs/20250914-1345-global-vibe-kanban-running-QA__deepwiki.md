@@ -354,3 +354,618 @@ Wiki pages you might want to explore:
 
 ### Answer
 
+Based on my analysis of the Vibe-Kanban codebase, I can explain how Claude Desktop interacts with Vibe-Kanban's MCP for task orchestration:
+
+## MCP Server Implementation
+
+Vibe-Kanban implements a Model Context Protocol (MCP) server that provides task management tools to AI coding agents like Claude Desktop. vibe-kanban:194-208  The MCP server exposes tools including `create_task`, `list_projects`, `list_tasks`, `update_task`, `delete_task`, and `get_task`. vibe-kanban:212-302 
+
+## Claude Desktop Configuration
+
+Claude Desktop can be configured to use Vibe-Kanban's MCP server through its configuration file at `~/.claude.json`. vibe-kanban:169-173  The MCP configuration for Claude Desktop uses the `mcpServers` key structure. vibe-kanban:111-123 
+
+## MCP Server Launch
+
+The MCP server is launched using the command `npx vibe-kanban --mcp`, which starts the dedicated MCP task server binary. vibe-kanban:100-113  The server runs as a stdio-based MCP service. vibe-kanban:52-58 
+
+## Task Orchestration Flow
+
+When Claude Desktop interacts with Vibe-Kanban's MCP:
+
+1. **Task Creation**: Claude Desktop can create new tasks in projects using the `create_task` tool, which requires a `project_id` and task details. vibe-kanban:212-222 
+
+2. **Task Monitoring**: Claude Desktop can list and monitor tasks using `list_tasks` and `get_task` tools, which provide task status information including execution attempt details. vibe-kanban:348-358 
+
+3. **Project Management**: Claude Desktop can view available projects using `list_projects` to understand the workspace structure. vibe-kanban:304-306 
+
+## Configuration UI
+
+Vibe-Kanban provides a user interface for configuring MCP servers across different coding agents, including Claude Desktop. vibe-kanban:122-143  Users can automatically add Vibe-Kanban as an MCP server with a single click. vibe-kanban:336-346 
+
+## Notes
+
+The interaction is primarily one-directional: Claude Desktop calls Vibe-Kanban's MCP tools to manage tasks and projects. I did not find evidence in the codebase of Vibe-Kanban's MCP calling back to Claude Code agents to perform tasks - instead, Vibe-Kanban appears to have its own executor system for running coding agents independently. The MCP integration allows Claude Desktop to create and monitor tasks that can then be executed by Vibe-Kanban's internal task execution system, but the actual task execution happens through Vibe-Kanban's executor framework rather than through MCP callbacks to Claude Desktop.
+
+
+### Citations
+
+
+**File:** crates/server/src/mcp/task_server.rs (L194-208)
+
+```rust
+#[derive(Debug, Clone)]
+pub struct TaskServer {
+    pub pool: SqlitePool,
+    tool_router: ToolRouter<TaskServer>,
+}
+
+impl TaskServer {
+    #[allow(dead_code)]
+    pub fn new(pool: SqlitePool) -> Self {
+        Self {
+            pool,
+            tool_router: Self::tool_router(),
+        }
+    }
+}
+```
+
+**File:** crates/server/src/mcp/task_server.rs (L212-302)
+
+```rust
+    #[tool(
+        description = "Create a new task/ticket in a project. Always pass the `project_id` of the project you want to create the task in - it is required!"
+    )]
+    async fn create_task(
+        &self,
+        Parameters(CreateTaskRequest {
+            project_id,
+            title,
+            description,
+        }): Parameters<CreateTaskRequest>,
+    ) -> Result<CallToolResult, ErrorData> {
+        // Parse project_id from string to UUID
+        let project_uuid = match Uuid::parse_str(&project_id) {
+            Ok(uuid) => uuid,
+            Err(_) => {
+                let error_response = serde_json::json!({
+                    "success": false,
+                    "error": "Invalid project ID format. Must be a valid UUID.",
+                    "project_id": project_id
+                });
+                return Ok(CallToolResult::error(vec![Content::text(
+                    serde_json::to_string_pretty(&error_response)
+                        .unwrap_or_else(|_| "Invalid project ID format".to_string()),
+                )]));
+            }
+        };
+
+        // Check if project exists
+        match Project::exists(&self.pool, project_uuid).await {
+            Ok(false) => {
+                let error_response = serde_json::json!({
+                    "success": false,
+                    "error": "Project not found",
+                    "project_id": project_id
+                });
+                return Ok(CallToolResult::error(vec![Content::text(
+                    serde_json::to_string_pretty(&error_response)
+                        .unwrap_or_else(|_| "Project not found".to_string()),
+                )]));
+            }
+            Err(e) => {
+                let error_response = serde_json::json!({
+                    "success": false,
+                    "error": "Failed to check project existence",
+                    "details": e.to_string(),
+                    "project_id": project_id
+                });
+                return Ok(CallToolResult::error(vec![Content::text(
+                    serde_json::to_string_pretty(&error_response)
+                        .unwrap_or_else(|_| "Database error".to_string()),
+                )]));
+            }
+            Ok(true) => {}
+        }
+
+        let task_id = Uuid::new_v4();
+        let create_task_data = CreateTask {
+            project_id: project_uuid,
+            title: title.clone(),
+            description: description.clone(),
+            parent_task_attempt: None,
+            image_ids: None,
+        };
+
+        match Task::create(&self.pool, &create_task_data, task_id).await {
+            Ok(_task) => {
+                let success_response = CreateTaskResponse {
+                    success: true,
+                    task_id: task_id.to_string(),
+                    message: "Task created successfully".to_string(),
+                };
+                Ok(CallToolResult::success(vec![Content::text(
+                    serde_json::to_string_pretty(&success_response)
+                        .unwrap_or_else(|_| "Task created successfully".to_string()),
+                )]))
+            }
+            Err(e) => {
+                let error_response = serde_json::json!({
+                    "success": false,
+                    "error": "Failed to create task",
+                    "details": e.to_string(),
+                    "project_id": project_id,
+                    "title": title
+                });
+                Ok(CallToolResult::error(vec![Content::text(
+                    serde_json::to_string_pretty(&error_response)
+                        .unwrap_or_else(|_| "Failed to create task".to_string()),
+                )]))
+            }
+        }
+    }
+```
+
+**File:** crates/server/src/mcp/task_server.rs (L304-306)
+
+```rust
+    #[tool(description = "List all the available projects")]
+    async fn list_projects(&self) -> Result<CallToolResult, ErrorData> {
+        match Project::find_all(&self.pool).await {
+```
+
+**File:** crates/server/src/mcp/task_server.rs (L348-358)
+
+```rust
+    #[tool(
+        description = "List all the task/tickets in a project with optional filtering and execution status. `project_id` is required!"
+    )]
+    async fn list_tasks(
+        &self,
+        Parameters(ListTasksRequest {
+            project_id,
+            status,
+            limit,
+        }): Parameters<ListTasksRequest>,
+    ) -> Result<CallToolResult, ErrorData> {
+```
+
+**File:** crates/executors/src/executors/claude.rs (L169-173)
+
+```rust
+    // MCP configuration methods
+    fn default_mcp_config_path(&self) -> Option<std::path::PathBuf> {
+        dirs::home_dir().map(|home| home.join(".claude.json"))
+    }
+}
+```
+
+**File:** crates/executors/src/executors/mod.rs (L111-123)
+
+```rust
+            _ => McpConfig::new(
+                vec!["mcpServers".to_string()],
+                serde_json::json!({
+                    "mcpServers": {}
+                }),
+                serde_json::json!({
+                    "command": "npx",
+                    "args": ["-y", "vibe-kanban", "--mcp"],
+                }),
+                false,
+            ),
+        }
+    }
+```
+
+**File:** npx-cli/bin/cli.js (L100-113)
+
+```javascript
+if (isMcpMode) {
+  extractAndRun("vibe-kanban-mcp", (bin) => {
+    const proc = spawn(bin, [], { stdio: "inherit" });
+    proc.on("exit", (c) => process.exit(c || 0));
+    proc.on("error", (e) => {
+      console.error("❌ MCP server error:", e.message);
+      process.exit(1);
+    });
+    process.on("SIGINT", () => {
+      console.error("\n🛑 Shutting down MCP server...");
+      proc.kill("SIGINT");
+    });
+    process.on("SIGTERM", () => proc.kill("SIGTERM"));
+  });
+```
+
+**File:** crates/server/src/bin/mcp_task_server.rs (L52-58)
+
+```rust
+            let service = TaskServer::new(pool)
+                .serve(stdio())
+                .await
+                .inspect_err(|e| {
+                    tracing::error!("serving error: {:?}", e);
+                    sentry::capture_error(e);
+                })?;
+```
+
+**File:** frontend/src/pages/McpServers.tsx (L122-143)
+
+```typescript
+  const handleConfigureVibeKanban = async () => {
+    if (!selectedProfile || !mcpConfig) return;
+
+    try {
+      // Parse existing configuration
+      const existingConfig = mcpServers.trim() ? JSON.parse(mcpServers) : {};
+
+      // Add vibe_kanban to the existing configuration using the schema
+      const updatedConfig = McpConfigStrategyGeneral.addVibeKanbanToConfig(
+        mcpConfig,
+        existingConfig
+      );
+
+      // Update the textarea with the new configuration
+      const configJson = JSON.stringify(updatedConfig, null, 2);
+      setMcpServers(configJson);
+      setMcpError(null);
+    } catch (err) {
+      setMcpError('Failed to configure vibe-kanban MCP server');
+      console.error('Error configuring vibe-kanban:', err);
+    }
+  };
+```
+
+**File:** frontend/src/pages/McpServers.tsx (L336-346)
+
+```typescript
+                  <Button
+                    onClick={handleConfigureVibeKanban}
+                    disabled={mcpApplying || mcpLoading || !selectedProfile}
+                    className="w-64"
+                  >
+                    Add Vibe-Kanban MCP
+                  </Button>
+                  <p className="text-sm text-muted-foreground mt-2">
+                    Automatically adds the Vibe-Kanban MCP server.
+                  </p>
+                </div>
+```
+
+## Q4
+
+а как сам Vibe-Kanban делает run Claude-Code и streaming output ? ведь я им каждый день пользуюсь) чет я запутался) ты как будто говоришь что он это не делает хаха?
+
+
+### Answer
+
+## Ответ
+
+Вы абсолютно правы! Я неточно объяснил - Vibe-Kanban **действительно запускает Claude Code** и стримит его вывод. Позвольте показать, как именно это работает.
+
+### Как Vibe-Kanban запускает Claude Code
+
+Vibe-Kanban имеет полноценную систему исполнителей (executors), которая может запускать различные AI агенты, включая Claude Code. vibe-kanban:35-48 
+
+### Процесс запуска Claude Code
+
+1. **Создание команды**: Система строит команду для запуска Claude Code через NPX vibe-kanban:27-33 
+
+2. **Spawn процесса**: Метод `spawn()` создает новый процесс Claude Code с настроенными stdin/stdout/stderr vibe-kanban:77-112 
+
+3. **Передача промпта**: Промпт записывается в stdin процесса Claude Code vibe-kanban:106-109 
+
+### Streaming вывода в реальном времени
+
+Самое интересное - система обрабатывает вывод Claude Code в реальном времени через `ClaudeLogProcessor`: vibe-kanban:154-167 
+
+Процессор парсит JSON-вывод Claude Code и преобразует его в нормализованные записи: vibe-kanban:230-250 
+
+### Обработка различных типов сообщений
+
+Система обрабатывает все типы сообщений от Claude Code:
+- Сообщения ассистента vibe-kanban:285-304 
+- Использование инструментов vibe-kanban:307-345 
+- Результаты выполнения команд vibe-kanban:419-470 
+
+### Поддержка сессий
+
+Система также поддерживает продолжение сессий Claude Code через флаг `--resume`: vibe-kanban:114-151 
+
+## Notes
+
+Извините за путаницу в предыдущих ответах! Vibe-Kanban действительно является полноценным оркестратором, который может запускать Claude Code и другие AI агенты, стримить их вывод в реальном времени и управлять их сессиями. Это не просто MCP сервер - это комплексная система управления задачами с собственными исполнителями.
+
+Wiki pages you might want to explore:
+- [AI Executor System (BloopAI/vibe-kanban)](/wiki/BloopAI/vibe-kanban#3)
+
+
+### Citations
+
+
+**File:** crates/executors/src/executors/claude.rs (L27-33)
+
+```rust
+fn base_command(claude_code_router: bool) -> &'static str {
+    if claude_code_router {
+        "npx -y @musistudio/claude-code-router code"
+    } else {
+        "npx -y @anthropic-ai/claude-code@latest"
+    }
+}
+```
+
+**File:** crates/executors/src/executors/claude.rs (L35-48)
+
+```rust
+/// An executor that uses Claude CLI to process tasks
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
+pub struct ClaudeCode {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub claude_code_router: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub append_prompt: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub plan: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dangerously_skip_permissions: Option<bool>,
+    #[serde(flatten)]
+    pub cmd: CmdOverrides,
+}
+```
+
+**File:** crates/executors/src/executors/claude.rs (L77-112)
+
+```rust
+    async fn spawn(
+        &self,
+        current_dir: &Path,
+        prompt: &str,
+    ) -> Result<AsyncGroupChild, ExecutorError> {
+        let (shell_cmd, shell_arg) = get_shell_command();
+        let command_builder = self.build_command_builder();
+        let base_command = command_builder.build_initial();
+        let claude_command = if self.plan.unwrap_or(false) {
+            create_watchkill_script(&base_command)
+        } else {
+            base_command
+        };
+
+        let combined_prompt = utils::text::combine_prompt(&self.append_prompt, prompt);
+
+        let mut command = Command::new(shell_cmd);
+        command
+            .kill_on_drop(true)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .current_dir(current_dir)
+            .arg(shell_arg)
+            .arg(&claude_command);
+
+        let mut child = command.group_spawn()?;
+
+        // Feed the prompt in, then close the pipe so Claude sees EOF
+        if let Some(mut stdin) = child.inner().stdin.take() {
+            stdin.write_all(combined_prompt.as_bytes()).await?;
+            stdin.shutdown().await?;
+        }
+
+        Ok(child)
+    }
+```
+
+**File:** crates/executors/src/executors/claude.rs (L114-151)
+
+```rust
+    async fn spawn_follow_up(
+        &self,
+        current_dir: &Path,
+        prompt: &str,
+        session_id: &str,
+    ) -> Result<AsyncGroupChild, ExecutorError> {
+        let (shell_cmd, shell_arg) = get_shell_command();
+        let command_builder = self.build_command_builder();
+        // Build follow-up command with --resume {session_id}
+        let base_command =
+            command_builder.build_follow_up(&["--resume".to_string(), session_id.to_string()]);
+        let claude_command = if self.plan.unwrap_or(false) {
+            create_watchkill_script(&base_command)
+        } else {
+            base_command
+        };
+
+        let combined_prompt = utils::text::combine_prompt(&self.append_prompt, prompt);
+
+        let mut command = Command::new(shell_cmd);
+        command
+            .kill_on_drop(true)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .current_dir(current_dir)
+            .arg(shell_arg)
+            .arg(&claude_command);
+
+        let mut child = command.group_spawn()?;
+
+        // Feed the followup prompt in, then close the pipe
+        if let Some(mut stdin) = child.inner().stdin.take() {
+            stdin.write_all(combined_prompt.as_bytes()).await?;
+            stdin.shutdown().await?;
+        }
+
+        Ok(child)
+```
+
+**File:** crates/executors/src/executors/claude.rs (L154-167)
+
+```rust
+    fn normalize_logs(&self, msg_store: Arc<MsgStore>, current_dir: &Path) {
+        let entry_index_provider = EntryIndexProvider::start_from(&msg_store);
+
+        // Process stdout logs (Claude's JSON output)
+        ClaudeLogProcessor::process_logs(
+            msg_store.clone(),
+            current_dir,
+            entry_index_provider.clone(),
+            HistoryStrategy::Default,
+        );
+
+        // Process stderr logs using the standard stderr processor
+        normalize_stderr_logs(msg_store, entry_index_provider);
+    }
+```
+
+**File:** crates/executors/src/executors/claude.rs (L230-250)
+
+```rust
+    pub fn process_logs(
+        msg_store: Arc<MsgStore>,
+        current_dir: &Path,
+        entry_index_provider: EntryIndexProvider,
+        strategy: HistoryStrategy,
+    ) {
+        let current_dir_clone = current_dir.to_owned();
+        tokio::spawn(async move {
+            let mut stream = msg_store.history_plus_stream();
+            let mut buffer = String::new();
+            let worktree_path = current_dir_clone.to_string_lossy().to_string();
+            let mut session_id_extracted = false;
+            let mut processor = Self::new_with_strategy(strategy);
+
+            while let Some(Ok(msg)) = stream.next().await {
+                let chunk = match msg {
+                    LogMsg::Stdout(x) => x,
+                    LogMsg::JsonPatch(_) | LogMsg::SessionId(_) | LogMsg::Stderr(_) => continue,
+                    LogMsg::Finished => break,
+                };
+
+```
+
+**File:** crates/executors/src/executors/claude.rs (L285-304)
+
+```rust
+                                ClaudeJson::Assistant { message, .. } => {
+                                    // Inject system init with model if first time
+                                    if processor.model_name.is_none()
+                                        && let Some(model) = message.model.as_ref()
+                                    {
+                                        processor.model_name = Some(model.clone());
+                                        let entry = NormalizedEntry {
+                                            timestamp: None,
+                                            entry_type: NormalizedEntryType::SystemMessage,
+                                            content: format!(
+                                                "System initialized with model: {model}"
+                                            ),
+                                            metadata: None,
+                                        };
+                                        let id = entry_index_provider.next();
+                                        msg_store.push_patch(
+                                            ConversationPatch::add_normalized_entry(id, entry),
+                                        );
+                                    }
+
+```
+
+**File:** crates/executors/src/executors/claude.rs (L307-345)
+
+```rust
+                                            ClaudeContentItem::ToolUse { id, tool_data } => {
+                                                let tool_name = tool_data.get_name().to_string();
+                                                let action_type = Self::extract_action_type(
+                                                    tool_data,
+                                                    &worktree_path,
+                                                );
+                                                let content_text = Self::generate_concise_content(
+                                                    tool_data,
+                                                    &action_type,
+                                                    &worktree_path,
+                                                );
+                                                let entry = NormalizedEntry {
+                                                    timestamp: None,
+                                                    entry_type: NormalizedEntryType::ToolUse {
+                                                        tool_name: tool_name.clone(),
+                                                        action_type,
+                                                    },
+                                                    content: content_text.clone(),
+                                                    metadata: Some(
+                                                        serde_json::to_value(item)
+                                                            .unwrap_or(serde_json::Value::Null),
+                                                    ),
+                                                };
+                                                let id_num = entry_index_provider.next();
+                                                processor.tool_map.insert(
+                                                    id.clone(),
+                                                    ClaudeToolCallInfo {
+                                                        entry_index: id_num,
+                                                        tool_name: tool_name.clone(),
+                                                        tool_data: tool_data.clone(),
+                                                        content: content_text.clone(),
+                                                    },
+                                                );
+                                                msg_store.push_patch(
+                                                    ConversationPatch::add_normalized_entry(
+                                                        id_num, entry,
+                                                    ),
+                                                );
+                                            }
+```
+
+**File:** crates/executors/src/executors/claude.rs (L419-470)
+
+```rust
+                                            let is_command = matches!(
+                                                info.tool_data,
+                                                ClaudeToolData::Bash { .. }
+                                            );
+                                            if is_command {
+                                                // For bash commands, attach result as CommandRun output where possible
+                                                // Prefer parsing Amp's claude-compatible Bash format: {"output":"...","exitCode":0}
+                                                let content_str = if let Some(s) = content.as_str()
+                                                {
+                                                    s.to_string()
+                                                } else {
+                                                    content.to_string()
+                                                };
+
+                                                let result = if let Ok(result) =
+                                                    serde_json::from_str::<AmpBashResult>(
+                                                        &content_str,
+                                                    ) {
+                                                    Some(crate::logs::CommandRunResult {
+
+                                                        exit_status : Some(
+                                                            crate::logs::CommandExitStatus::ExitCode {
+                                                                code: result.exit_code,
+                                                            },
+                                                        ),
+                                                        output: Some(result.output)
+                                                    })
+                                                } else {
+                                                    Some(crate::logs::CommandRunResult {
+                                                        exit_status: (*is_error).map(|is_error| {
+                                                            crate::logs::CommandExitStatus::Success { success: !is_error }
+                                                        }),
+                                                        output: Some(content_str)
+                                                    })
+                                                };
+
+                                                let entry = NormalizedEntry {
+                                                    timestamp: None,
+                                                    entry_type: NormalizedEntryType::ToolUse {
+                                                        tool_name: info.tool_name.clone(),
+                                                        action_type: ActionType::CommandRun {
+                                                            command: info.content.clone(),
+                                                            result,
+                                                        },
+                                                    },
+                                                    content: info.content.clone(),
+                                                    metadata: None,
+                                                };
+                                                msg_store.push_patch(ConversationPatch::replace(
+                                                    info.entry_index,
+                                                    entry,
+                                                ));
+```
+

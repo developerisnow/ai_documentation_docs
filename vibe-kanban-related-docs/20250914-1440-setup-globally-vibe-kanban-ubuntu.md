@@ -8,7 +8,7 @@ tags: [vibe-kanban, mcp, ubuntu, global-setup, claude-code, eywa1]
 
 # Global Vibe-Kanban Setup for Ubuntu (eywa1)
 
-## <¯ Key Insights
+## <ï¿½ Key Insights
 
 ### Current eywa1 Status
 - **Note from user**: Global vibe-kanban likely already running on port 5170
@@ -19,7 +19,7 @@ tags: [vibe-kanban, mcp, ubuntu, global-setup, claude-code, eywa1]
 - Config in `~/.claude.json` for Claude Code
 - SQLite database in working directory
 
-## =Ë Setup Instructions for Ubuntu (eywa1)
+## =ï¿½ Setup Instructions for Ubuntu (eywa1)
 
 ### Step 1: Check Existing Setup
 ```bash
@@ -245,7 +245,7 @@ rm ~/vibe-kanban/db.sqlite
 systemctl --user restart vibe-kanban
 ```
 
-## =Ê Multi-User Setup (Optional)
+## =ï¿½ Multi-User Setup (Optional)
 
 If multiple users need access on eywa1:
 ```bash
@@ -289,7 +289,7 @@ sudo chown vibe-kanban:vibe-kanban /var/lib/vibe-kanban
 }
 ```
 
-##   Important Notes for eywa1
+## ï¿½ Important Notes for eywa1
 
 1. **Check First**: Verify if already running on port 5170
 2. **Node Version**: Use v20.19.5 from NVM
@@ -297,7 +297,7 @@ sudo chown vibe-kanban:vibe-kanban /var/lib/vibe-kanban
 4. **Lingering**: Enable for persistent services
 5. **Single Instance**: Only one global instance needed
 
-## =Ú Quick Commands Reference
+## =ï¿½ Quick Commands Reference
 
 ```bash
 # Status check
@@ -316,7 +316,7 @@ curl http://localhost:5170/health
 ls -la ~/vibe-kanban/db.sqlite
 ```
 
-## <¯ Expected Result
+## <ï¿½ Expected Result
 
 After setup:
 -  Vibe-kanban running on port 5170

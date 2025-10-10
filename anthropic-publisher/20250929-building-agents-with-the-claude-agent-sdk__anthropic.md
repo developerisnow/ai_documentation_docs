@@ -1,8 +1,4 @@
 <!-- https://www.anthropic.com/engineering/building-agents-with-the-claude-agent-sdk -->
-[Engineering at Anthropic](https://www.anthropic.com/engineering)
-
-![](https://www-cdn.anthropic.com/images/4zrzovbb/website/521a945a74f2d25262db4a002073aaeec9bc1919-1000x1000.svg)
-
 # Building agents with the Claude Agent SDK
 
 Published Sep 29, 2025

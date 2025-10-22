@@ -112,8 +112,8 @@ done
 ### Setup Telegram Alerts
 
 The monitoring script (`~/bin/vibe-kanban-monitor.sh`) automatically:
-- Checks health every 5 minutes
-- Kills excess processes (>5)
+- Checks health every 4 hours
+- Kills excess processes (>10)
 - Restarts dead service
 - Sends Telegram notifications
 

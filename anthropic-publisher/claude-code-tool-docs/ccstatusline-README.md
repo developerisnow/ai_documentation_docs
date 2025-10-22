@@ -1,1 +1,0 @@
-/Users/user/__Repositories/LLMs-cc-ccstatusline/README.md

@@ -8,7 +8,7 @@ tags: [vibe-kanban, mcp, macos, global-setup, claude-code]
 
 # Global Vibe-Kanban Setup for macOS
 
-## <¯ Key Insights from Research
+## <ï¿½ Key Insights from Research
 
 ### Understanding the Problem
 - **Issue**: Adding vibe-kanban to each project's `.mcp.json` creates multiple instances
@@ -20,7 +20,7 @@ tags: [vibe-kanban, mcp, macos, global-setup, claude-code]
 - **Config path in JSON**: `["mcpServers"]`
 - **Database location**: Each instance has local SQLite in its working directory
 
-## =Ë Global Setup Instructions for macOS
+## =ï¿½ Global Setup Instructions for macOS
 
 ### Step 1: Understand Current State
 ```bash
@@ -152,7 +152,7 @@ Once configured globally, Claude Code will have access to:
 - `update_task` - Update task
 - `delete_task` - Delete task
 
-##   Important Notes
+## ï¿½ Important Notes
 
 1. **Single Instance**: Only ONE vibe-kanban instance should run globally
 2. **Fixed Port**: Use PORT=5170 environment variable for consistency
@@ -185,7 +185,7 @@ find ~ -name "db.sqlite" -path "*/vibe-kanban/*" 2>/dev/null
 rm -f ~/vibe-kanban/db.sqlite
 ```
 
-## =Ê Architecture Understanding
+## =ï¿½ Architecture Understanding
 
 ### What Happens with Global Config:
 1. Claude Code reads `~/.claude.json` on startup
@@ -215,7 +215,7 @@ echo " Removed vibe-kanban from all project configs"
 echo " Now using global config in ~/.claude.json"
 ```
 
-## =Ú References
+## =ï¿½ References
 
 - Vibe-Kanban expects config in: `~/.claude.json`
 - Config path: `["mcpServers"]`

@@ -1,5 +1,101 @@
 # Changelog
 
+## 2.0.25
+
+- Removed legacy SDK entrypoint. Please migrate to @anthropic-ai/claude-agent-sdk for future SDK updates: https://docs.claude.com/en/docs/claude-code/sdk/migration-guide
+
+## 2.0.24
+
+- Fixed a bug where project-level skills were not loading when --setting-sources 'project' was specified
+- Claude Code Web: Support for Web -> CLI teleport
+- Sandbox: Releasing a sandbox mode for the BashTool on Linux & Mac
+
+## 2.0.22
+
+- Fixed content layout shift when scrolling through slash commands
+- IDE: Add toggle to enable/disable thinking.
+- Fix bug causing duplicate permission prompts with parallel tool calls
+- Add support for enterprise managed MCP allowlist and denylist
+
+## 2.0.21
+
+- Support MCP `structuredContent` field in tool responses
+- Added an interactive question tool
+- Claude will now ask you questions more often in plan mode
+- Added Haiku 4.5 as a model option for Pro users
+- Fixed an issue where queued commands don't have access to previous messages' output
+
+## 2.0.20
+
+- Added support for Claude Skills
+
+## 2.0.19
+
+- Auto-background long-running bash commands instead of killing them. Customize with BASH_DEFAULT_TIMEOUT_MS
+- Fixed a bug where Haiku was unnecessarily called in print mode
+
+## 2.0.17
+
+- Added Haiku 4.5 to model selector!
+- Haiku 4.5 automatically uses Sonnet in plan mode, and Haiku for execution (i.e. SonnetPlan by default)
+- 3P (Bedrock and Vertex) are not automatically upgraded yet. Manual upgrading can be done through setting `ANTHROPIC_DEFAULT_HAIKU_MODEL`
+- Introducing the Explore subagent. Powered by Haiku it'll search through your codebase efficiently to save context!
+- OTEL: support HTTP_PROXY and HTTPS_PROXY
+- `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC` now disables release notes fetching
+
+## 2.0.15
+
+- Fixed bug with resuming where previously created files needed to be read again before writing
+- Fixed bug with `-p` mode where @-mentioned files needed to be read again before writing
+
+## 2.0.14
+
+- Fix @-mentioning MCP servers to toggle them on/off
+- Improve permission checks for bash with inline env vars
+- Fix ultrathink + thinking toggle
+- Reduce unnecessary logins
+- Document --system-prompt
+- Several improvements to rendering
+- Plugins UI polish
+
+## 2.0.13
+
+- Fixed `/plugin` not working on native build
+
+## 2.0.12
+
+- **Plugin System Released**: Extend Claude Code with custom commands, agents, hooks, and MCP servers from marketplaces
+- `/plugin install`, `/plugin enable/disable`, `/plugin marketplace` commands for plugin management
+- Repository-level plugin configuration via `extraKnownMarketplaces` for team collaboration
+- `/plugin validate` command for validating plugin structure and configuration
+- Plugin announcement blog post at https://www.anthropic.com/news/claude-code-plugins
+- Plugin documentation available at https://docs.claude.com/en/docs/claude-code/plugins
+- Comprehensive error messages and diagnostics via `/doctor` command
+- Avoid flickering in `/model` selector
+- Improvements to `/help`
+- Avoid mentioning hooks in `/resume` summaries
+- Changes to the "verbose" setting in `/config` now persist across sessions
+
+## 2.0.11
+
+- Reduced system prompt size by 1.4k tokens
+- IDE: Fixed keyboard shortcuts and focus issues for smoother interaction
+- Fixed Opus fallback rate limit errors appearing incorrectly
+- Fixed /add-dir command selecting wrong default tab
+
+## 2.0.10
+
+- Rewrote terminal renderer for buttery smooth UI
+- Enable/disable MCP servers by @mentioning, or in /mcp
+- Added tab completion for shell commands in bash mode
+- PreToolUse hooks can now modify tool inputs
+- Press Ctrl-G to edit your prompt in your system's configured text editor
+- Fixes for bash permission checks with environment variables in the command
+
+## 2.0.9
+
+- Fix regression where bash backgrounding stopped working
+
 ## 2.0.8
 
 - Update Bedrock default Sonnet model to `global.anthropic.claude-sonnet-4-5-20250929-v1:0`
